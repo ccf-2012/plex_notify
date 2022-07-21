@@ -20,7 +20,7 @@ plex = PlexServer(ARGS.plex, ARGS.token)
 
 if plex:
     if ARGS.library.isnumeric():
-        lib = plex.library.sections()[ARGS.library]
+        lib = plex.library.sections()[int(ARGS.library)]
     else:
         lib = plex.library.section(ARGS.library)
 
