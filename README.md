@@ -59,7 +59,7 @@ python3 plex_notify.py -l 电影 -f '/gd124/media/148/emby/TV/cn/庭外 (2022)' 
 * torcp 2022.7.21 版本加入 `--after-copy-script` 参数，可在完成一个媒体项目的 link/move 之后，对目标文件夹执行一个脚本。
 * torcp传出的是一个在 Plex/Emby 根目录下面的相对目录
 ### 如果直接在本地硬盘上运行torcp，或在GD上使用`--move-run`运行torcp，方法如下：
-1. 编辑一个 `plex_notify.sh`，在torcp中有示例，内容如下，修改其中除 `-f "$1"` 之外的参数：
+1. 编辑一个 `plex_notify.sh`，在torcp中有示例，内容如下，修改其中除 `-f` 参数外的各参数：
 ```sh
 #!/bin/bash#
 # 此处应为运行Plex Server的那台机器所识别的Plex媒体库路径，在TV/Movie之上的那一层目录，结尾应有'/'
@@ -70,7 +70,7 @@ python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "PLEX_ROOT_DIR$1" -s ht
 2. 在原 `rcp.sh` 中调用 torcp 的地方，加入新参数 `--after-copy-script /home/ccf2012/torcp/plex_notify.sh`
 
 * 如此，在torcp完成改名硬链/移动后，将调用plex_notify通知plex对指定的新加项目进行处理
-* 注1：torcp应以源码方式添加，即以 `python3 tp.py` 方式调用
+* 注1：torcp 应以源码方式添加，即以 `python3 tp.py` 方式调用
 
 
 ### 如果torcp在本地完成改名硬链后，再上传gd的，则：
