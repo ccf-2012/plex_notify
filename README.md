@@ -62,9 +62,10 @@ python3 plex_notify.py -l 电影 -f '/gd124/media/148/emby/TV/cn/庭外 (2022)' 
 1. 编辑一个 `plex_notify.sh`，在torcp中有示例，内容如下，修改其中除 `-f "$1"` 之外的参数：
 ```sh
 #!/bin/bash#
-PLEX_ROOT_DIR=/gd1/emby/
-echo PLEX_ROOT_DIR"$1"
-python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f PLEX_ROOT_DIR"$1" -s http://plex.server.ip:32400 -t plex-token
+# 此处应为运行Plex Server的那台机器所识别的Plex媒体库路径，在TV/Movie之上的那一层目录，结尾应有'/'
+PLEX_ROOT_DIR="/gd1/emby/"
+echo "PLEX_ROOT_DIR$1"
+python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "PLEX_ROOT_DIR$1" -s http://plex.server.ip:32400 -t plex-token
 ```
 2. 在原 `rcp.sh` 中调用 torcp 的地方，加入新参数 `--after-copy-script /home/ccf2012/torcp/plex_notify.sh`
 
@@ -73,25 +74,33 @@ python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f PLEX_ROOT_DIR"$1" -s ht
 
 
 ### 如果torcp在本地完成改名硬链后，再上传gd的，则：
+0. 在这种方式下，由于torcp输出的目标文件夹，要在rclone copy之后才会出现在plex server的媒体库中(同时多个进程操作过程中需要处理冲突)。因此要保存此路径待完成传输后再调用plex_notify，一个可能的方案是用redis库进行中转
 1. 编辑一个 `exp.sh`，在其中将 torcp 输出的目标文件夹内容保存到一个shell变量中，`exp.sh` 内容如下：
 ```sh
 #!/bin/bash
-
 # 此处应为运行Plex Server的那台机器所识别的Plex媒体库路径，在TV/Movie之上的那一层目录，结尾应有'/'
-PLEX_ROOT_DIR=/gd1/emby/
-export CURRENT_PLEX_ITEM="PLEX_ROOT_DIR$1"
+PLEX_ROOT_DIR="/gd1/plex"
+CURRENT_PLEX_ITEM="$PLEX_ROOT_DIR/$1"
+redis-cli RPUSH TorcpList "$CURRENT_PLEX_ITEM"
 ```
-2. 在原 `rcp.sh` 中，对torcp命令加入`--after-copy-script`，并在上传完成后，运行 `plex_notify.py`, 例如：
+
+2. 在原 `rcp.sh` 中，对torcp命令加入`--after-copy-script`运行上述`exp.sh`，并在上传完成后，运行 `plex_notify.py`, 例如：
 ```sh
 # example 2: rclone copy to gd drive
-python /home/ccf2012/torcp/tp.py "$1" -d "/home/ccf2012/emby/$2/" -s --tmdb-api-key <tmdb api key> --lang cn,jp
+python /home/ccf2012/torcp/tp.py "$1" -d "/home/ccf2012/emby/$2/" -s --tmdb-api-key <tmdb api key> --lang cn,jp --after-copy-script /home/ccf2012/torcp/exp.sh >>/home/ccf2012/rcp.log 2>>/home/ccf2012/rcp_error.log
 rclone copy "/home/ccf2012/emby/$2/"  gd:/media/148/emby/
 rm -rf "/home/ccf2012/emby/$2/"
 
-echo $CURRENT_PLEX_ITEM
-sleep 30
-python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "$CURRENT_PLEX_ITEM" -s http://plex.server.ip:32400 -t plex-token
+
+CURRENT_PLEX_ITEM=$(redis-cli LPOP TorcpList)
+while [ ! -z "$CURRENT_PLEX_ITEM"  ]
+do
+  echo $CURRENT_PLEX_ITEM >> /home/ccf2012/plex.log
+  sleep 30
+  python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "$CURRENT_PLEX_ITEM" -s http://plex.server.ip:32400 -t plex-token >> /home/ccf2012/plex.log 2>>/home/ccf2012/plex_error.log
+  CURRENT_PLEX_ITEM=$(redis-cli LPOP TorcpList)
+done
 ```
 
-* 一个位置上传gd后，各地rclone mount的盘，不会及时更新响应，脚本中加了 `sleep 30` 也并不能保证，各位使用时斟酌修改
+* 一个节点上传gd后，在其它节点rclone mount的盘，不会及时更新响应，脚本中加了 `sleep 30` 也并不能保证，各位使用时斟酌修改
 
