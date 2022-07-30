@@ -78,10 +78,7 @@ python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "PLEX_ROOT_DIR$1" -s ht
 1. 编辑一个 `exp.sh`，在其中将 torcp 输出的目标文件夹内容保存到一个shell变量中，`exp.sh` 内容如下：
 ```sh
 #!/bin/bash
-# 此处应为运行Plex Server的那台机器所识别的Plex媒体库路径，在TV/Movie之上的那一层目录，结尾应有'/'
-PLEX_ROOT_DIR="/gd1/plex"
-CURRENT_PLEX_ITEM="$PLEX_ROOT_DIR/$1"
-redis-cli RPUSH TorcpList "$CURRENT_PLEX_ITEM"
+redis-cli RPUSH TorcpList "$1"
 ```
 
 2. 在原 `rcp.sh` 中，对torcp命令加入`--after-copy-script`运行上述`exp.sh`，并在上传完成后，运行 `plex_notify.py`, 例如：
@@ -91,14 +88,29 @@ python /home/ccf2012/torcp/tp.py "$1" -d "/home/ccf2012/emby/$2/" -s --tmdb-api-
 rclone copy "/home/ccf2012/emby/$2/"  gd:/media/148/emby/
 rm -rf "/home/ccf2012/emby/$2/"
 
+# 此处应为运行Plex Server的那台机器所识别的Plex媒体库路径，在TV/Movie之上的那一层目录，结尾应有'/'
+PLEX_ROOT_DIR="/gd124/media/148/emby/"
+TORCP_ITEM=$(redis-cli LPOP TorcpList)
 
-CURRENT_PLEX_ITEM=$(redis-cli LPOP TorcpList)
-while [ ! -z "$CURRENT_PLEX_ITEM"  ]
+CURRENT_PLEX_ITEM="$PLEX_ROOT_DIR$TORCP_ITEM"
+
+# 此处根据自己的Plex资料库的路径规律编写
+if [[ "$TORCP_ITEM" == *"TV/"* ]];
+then
+  CAT=2
+else
+  CAT=1
+fi
+
+
+while [ ! -z "$TORCP_ITEM"  ]
 do
+  echo $CAT >> /home/ccf2012/plex.log
   echo $CURRENT_PLEX_ITEM >> /home/ccf2012/plex.log
   sleep 30
-  python3 /home/ccf2012/plex_notify/plex_notify.py -l 2 -f "$CURRENT_PLEX_ITEM" -s http://plex.server.ip:32400 -t plex-token >> /home/ccf2012/plex.log 2>>/home/ccf2012/plex_error.log
-  CURRENT_PLEX_ITEM=$(redis-cli LPOP TorcpList)
+  python3 /home/ccf2012/plex_notify/plex_notify.py -l $CAT -f "$CURRENT_PLEX_ITEM" -s http://plex.server.ip:32400 -t plex-toke >> /home/ccf2012/plex.log 2>>/home/ccf2012/plex_error.log
+  TORCP_ITEM=$(redis-cli LPOP TorcpList)
+  CURRENT_PLEX_ITEM="$PLEX_ROOT_DIR$TORCP_ITEM"
 done
 ```
 
